@@ -1,0 +1,386 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+		<meta charset="utf-8">
+
+		<title>Mobile App with XML View with JSON Data</title>
+
+		<script id='sap-ui-bootstrap'
+				src='https://sapui5.hana.ondemand.com/resources/sap-ui-core.js'
+				data-sap-ui-theme='sap_bluecrystal'
+				data-sap-ui-libs='sap.m,sap.ui.vbm'
+				data-sap-ui-compatVersion="edge"
+				data-sap-ui-xx-bindingSyntax='complex'>
+		
+					jQuery(function() {
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-core');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-widget');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-mouse');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-sortable');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-droppable');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-draggable');
+						 
+						
+						 sap.ui.localResources("./");
+						 $.sap.require('LatLon');
+						
+					  });
+				
+				
+		</script>
+		<script id="myXml" type="text/xmldata">
+		<mvc:View xmlns:core="sap.ui.core" xmlns:mvc="sap.ui.core.mvc" xmlns:vbm="sap.ui.vbm" xmlns="sap.m" controllerName="myController" displayBlock="true">
+		  <App>
+			 <Page title="Hello">
+				<vbm:GeoMap id="VBIDnD" drop="handleDropGeoMap" refMapLayerStack="DEFAULT" click="onClickGeoMap">
+					<vbm:vos>
+					<vbm:Circles id="VBICircles" items="{/Circles}">
+					   <vbm:items>
+					          <vbm:Circle position="{pos}" color="rgb(102, 153, 255)" colorBorder="rgb(0, 51, 153)" radius="{= ${edit} ? 7 : 9}" click="magicPositionChange"/>
+					   </vbm:items>
+					</vbm:Circles>
+						<vbm:Spots id="VBIDnDSpots" click="onClickItem" posChangeable="true"
+							scaleChangeable="false" contextMenu="doSomething" items="{/Spots/items}" drop="handleSpotsDrop" handleMoved="handleHandleSpotsMoved" class="mydivheader">
+						
+							<vbm:items>
+								<vbm:Spot id="Spot" position="{pos}" tooltip="{tooltip}"
+									type="{type}" text="{text}"									
+							drop="handleSpotsDrop1" handleMoved="handleHandleSpotsMoved1" click="handleSpotClick" class="mydivheader">	
+								</vbm:Spot>
+							</vbm:items>
+							<vbm:dragSource id="idDragSource">
+								<vbm:DragSource type="sap.ui.vbm.VoBase"/>
+							</vbm:dragSource>
+							<vbm:dropTarget id="idDragSource2">
+								<vbm:DropTarget type="sap.ui.vbm.GeoMap"/>
+							</vbm:dropTarget>							
+						</vbm:Spots>
+						<vbm:Areas items='{/Areas}'>
+						     <vbm:Area position='{H}' tooltip="{B}" color="{C}" colorBorder="rgba(118,118,118,0.6)" key="{K}" hotDeltaColor="{D}" click='onClickAreas'>
+							 </vbm:Area>
+						</vbm:Areas>
+					</vbm:vos>
+				</vbm:GeoMap>
+				<footer>
+					<OverflowToolbar>
+						<ToolbarSpacer/>
+						<Button type="Accept" text="Create Polygon" press="onCreatePolygon"/>
+						<Button type="Accept" text="Edit Polygon" press="onEditPolygon"/>
+						<Button type="Accept" text="Finish Create" press="onCreatePolygonFinish"/>
+						<Button type="Accept" text="Finish Edit" press="onEditPolygonFinish"/>
+					</OverflowToolbar>
+				</footer>
+			 </Page>
+		  </App>
+		</mvc:View>
+		</script>
+
+		<script>
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-core');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-widget');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-mouse');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-sortable');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-droppable');
+						 $.sap.require('sap.ui.thirdparty.jqueryui.jquery-ui-draggable');
+						 Number.prototype.toRadians = function() {
+							return this * Math.PI / 180;
+						};
+						
+						 Number.prototype.toDegrees = function() {
+							return this * 180 / Math.PI;
+						};						
+						
+						 sap.ui.localResources("sapui5draganddrop");
+			sap.ui.controller("myController", {
+				onInit: function() {
+				this.oView = this.getView();
+				this.stopPolyGonCreate = true;
+				this.stopPolyGonEdit = true;
+				var aMapProvider = [
+										
+									{
+										copyright: "Copyright © HERE",
+										maxLOD: "20",
+										minLOD: "0",
+										name: "HERE_NORMAL",
+										tileX: "256",
+										tileY: "256",
+										Source: [
+										{
+											id: "myMap",
+											url: "https://mt.google.com/vt/x={X}&y={Y}&z={LOD}"
+											}
+										]
+									}
+										
+									];
+									var aMapLayerStacks = [
+										{
+											name: "DEFAULT",
+											MapLayer: [
+												{
+												colBkgnd: "RGB(255,255,255)",
+												name: "HERE",
+												opacity: 0.8,
+												refMapProvider: "HERE_NORMAL"
+												}
+											]
+										}
+									];
+
+									var oMapConfiguration = {};
+									oMapConfiguration.MapProvider = aMapProvider;
+									oMapConfiguration.MapLayerStacks = aMapLayerStacks;
+					var model = new sap.ui.model.json.JSONModel();
+					   this.oVBI = this.getView().byId("VBIDnD");
+                       this.oSpots = this.getView().byId("VBIDnDSpots");
+					   this.oCircles = this.getView().byId("VBICircles");
+					   
+					   this.oVBI.setMapConfiguration(oMapConfiguration);
+					model.setData({
+					    "Configuration":{
+						
+						                },
+						"Circles":[
+						   //{"pos":"37.622882;56.755202;0"},
+						   //{"pos":"77.1024902;28.7040592;0"}
+						],
+						"Spots": {
+							"items": [
+								{
+									"pos": "37.622882;56.755202;0",
+									"tooltip": "Moscow",
+									"type": "Inactive",
+									"text": "12345"		
+								},{
+									"pos": "77.1024902;28.7040592;0",
+									"tooltip": "Delhi",
+									"type":"Success"
+								},{
+									"pos": "-74.013327;40.705395;0",
+									"tooltip": "New York",
+									"type": "Error",
+									"text": "1"
+								},{
+									"pos": "116.407072;39.906235;0",
+									"tooltip": "Beijing",
+									"type": "Warning",
+									"text": "123"
+								}
+							]
+						},
+						"Areas": 
+				    [
+
+					],
+					"SelectedAreaContext":""
+					});
+					this.getView().setModel(model);
+				},
+				doSomething: function() {
+					alert("Hello World!");
+				},
+				
+				handleSpotsDrop: function(event){
+				  console.log("spot drop "+event);
+				},
+				
+				handleHandleSpotsMoved: function(event){
+				  console.log("spot Moved "+event);
+				},
+				
+				handleSpotsDrop1: function(event){
+				  console.log("spot drop 1 "+event);
+				},
+				
+				handleHandleSpotsMoved1: function(event){
+				  console.log("spot Moved 1 "+event);
+				},
+				
+				handleDropGeoMap: function(event){
+				   console.log("geo map1 "+event);
+				},
+				
+				handleSpotClick: function(event){
+				   console.log("spot "+event);
+				   that = event.getSource();
+				   var changePositionSpot = function(pos){
+				     that.setPosition(pos);
+				   };
+				      this.oVBI.getPositionInteractive( false, changePositionSpot);
+					  
+					  $('#'+event.getSource().getId())
+					  .draggable()
+					  .bind('mousedown', function(event, ui){
+						console.log("Hello1");
+					  })
+					  .bind('drag', function(event, ui){
+						console.log("Hello");
+					  });
+					  
+					  
+				},
+				
+				dropMap : function(event){
+				 console.log("drop on map");
+				},
+				
+				onAfterRendering : function(){
+
+				},
+				onClickAreas : function(evt){
+				 console.log(evt);
+				 var oContext = evt.getSource().getBindingContext();
+				 oModel.setProperty("/SelectedAreaContext",oContext.getPath());				 
+				},
+				
+				updateEditCircles : function(){
+				    var oModel = this.getView().getModel();
+				    var p = oModel.getProperty(oModel.getProperty("/SelectedAreaContext"));				
+					p = p["H"].split(/;0.0;|;0;/);
+					var k = [], i=0, g, n,o;	
+					
+					 var toAverage = function(n1,n2){
+					      return((parseFloat(n1)+parseFloat(n2))/2);
+					 };
+				 
+				 for(i=0;i<p.length;i++){
+                    if(i === p.length-1){
+						k.push({"pos":p[p.length-1], "edit":false});
+                        n = p[0].split(";");						
+					}else{
+					    k.push({"pos":p[i]+";0.0", "edit":false});
+                        n = p[i+1].split(";");						
+					}
+					g = p[i].split(";");	
+					k.push({"pos":(toAverage(g[0],n[0])+";"+toAverage(g[1],n[1])+";0.0"), "edit":true});
+				 }
+				 oModel.setProperty("/Circles",k);				
+				},
+				
+				onCreatePolygon : function(evt){
+				   var that = this;
+				   var oModel = this.getView().getModel();
+				   var oData = oModel.getData();
+				   
+				   var length_areas = oData["Areas"].length;
+				   var s_length_areas = length_areas.toString();
+				   p = {
+				   		    "B": "ZIP code zone 4",
+							"C": "rgba(92;186;230;0.6)",
+							"D": "rgba(92;186;230;0.8)",
+							"H":"",
+							//"H":"[]",
+							"K": length_areas.toString()
+				   };			   
+				   oData["Areas"].push(p);
+				   oData["Circles"] = [];
+				   oModel.setData(oData);
+				   this.stopPolyGonCreate = false;				   
+				},
+
+				
+				onCreatePolygonFinish : function(){
+				   if(this.stopPolyGonCreate){
+				     return;
+				   }
+				   this.stopPolyGonCreate = true;
+				   oModel = this.getView().getModel();
+				   oData = oModel.getData();
+				   oModel.setProperty("/Circles",[]);
+				},
+				
+				onClickGeoMap : function(evt){
+				  console.log("Hello");
+				  if(!this.stopPolyGonCreate){
+				  
+				   oModel = this.getView().getModel();
+				   oData = oModel.getData();
+				   length_areas = oData["Areas"].length - 1;
+				   s_length_areas = length_areas.toString();
+				   q=oModel.getProperty("/Circles");
+				   q.push({"pos":evt.getParameter("pos"), "edit":false});
+				   
+				   
+				   
+				   g = oModel.getProperty("/Areas/"+length_areas);
+				   if(g["H"] === ""){
+				     g["H"] = evt.getParameter("pos");
+				   }
+				   g["H"] += ";"+evt.getParameter("pos");
+				   oModel.setProperty("/Circles",q);
+				   oModel.setProperty("/Areas/"+length_areas,g);
+				   
+				  }
+				},
+				
+				updatePolygon : function(){
+				  var oModel = this.getView().getModel();
+				  var p = oModel.getProperty("/Circles");
+				  var i = 0, k = [];
+				  for(i=0;i<p.length;i++){
+				    if(!p[i]["edit"]){
+					    k.push(p[i]["pos"]);
+				    }
+				  }
+				  var q = oModel.getProperty("/SelectedAreaContext");
+				  var g = oModel.getProperty(q);
+				  g["H"] = k.join(";");
+				  oModel.setProperty(q,g);
+				},
+				
+				changePolyGon: function(){
+				
+				   var oModel = this.getView().getModel();
+				   var oCircles = oModel.getProperty("/Circles");
+				   var p = oModel.setProperty(oModel.getProperty("/SelectedAreaContext"));
+				   if(!p){
+				      return false;
+				   }
+				   
+				},
+				
+				onEditPolygon : function(){
+				   var g = oModel.getProperty("/SelectedAreaContext"); 
+				   this.stopPolyGonEdit = g === "";
+				   if(this.stopPolyGonEdit){
+				      return;
+				   }
+				   this.updateEditCircles();				
+				},
+				
+				onEditPolygonFinish : function(){
+					if(this.stopPolyGonEdit){
+					  return;
+					}
+					this.stopPolyGonEdit = true;
+				   oModel = this.getView().getModel();
+				   oData = oModel.getData();
+				   oModel.setProperty("/Circles",[]);
+				   oModel.setProperty("/SelectedAreaContext",""); 
+				},
+				
+				magicPositionChange : function(evt){
+				  console.log();
+				  //this.oVBI.getPositionInteractive( false, changePositionSpot);
+				  var oContext = evt.getSource().getBindingContext();
+				  var oModel = oContext.getModel();
+				  var p = oContext.getProperty(oContext.getPath());
+				  var g = (function(pos){
+				             p = {"pos":pos,"edit":false};
+							 oModel.setProperty(oContext.getPath(),p);
+							 this.updatePolygon();
+							 this.updateEditCircles();
+				          }).bind(this);
+				  this.oVBI.getPositionInteractive( false, g);
+				}
+			});
+			sap.ui.view({ viewContent: jQuery('#myXml').html(), type:sap.ui.core.mvc.ViewType.XML }).placeAt("content")
+		</script>
+
+	</head>
+	<body id='content' class='sapUiBody'>
+	</body>
+</html>
